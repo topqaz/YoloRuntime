@@ -12,7 +12,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 
 # -------------- OpenCV  ------------------#
-set(OpenCV_DIR D:/user/top/opencv/build/x64/vc16/lib)
+#set(OpenCV_DIR D:/user/top/opencv/build/x64/vc16/lib)
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
@@ -30,7 +30,7 @@ endif ()
 # -------------- ONNXRUNTIME  ------------------#
 
 # Set ONNXRUNTIME_VERSION
-set(ONNXRUNTIME_VERSION 1.22.1)
+set(ONNXRUNTIME_VERSION 1.23.2)
 
 if (WIN32)
     if (USE_CUDA)

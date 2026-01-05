@@ -1,5 +1,14 @@
+#if defined(_WIN32)
+#define YOLO_API extern "C" __declspec(dllexport)
+#elif defined(__GNUC__)
+#define YOLO_API extern "C" __attribute__((visibility("default")))
+#else
+#define YOLO_API extern "C"
+#endif
+
 #include <iostream>
 #include "inference.h"
+
 
 
 void drawMask(cv::Mat& img, const cv::Mat& mask, cv::Rect box, const cv::Scalar& color, float alpha = 0.5f)
@@ -26,7 +35,7 @@ void drawMask(cv::Mat& img, const cv::Mat& mask, cv::Rect box, const cv::Scalar&
 
 
 static YOLO_V8 *g_yolodetect = nullptr;
-extern "C" __declspec(dllexport)
+YOLO_API
 bool InitModel(const char *modelPath, int size,int task, bool useGPU,bool nms,bool half) {
     g_yolodetect = new YOLO_V8;
     DL_INIT_PARAM params;
@@ -56,7 +65,7 @@ bool InitModel(const char *modelPath, int size,int task, bool useGPU,bool nms,bo
     g_yolodetect->CreateSession(params);
     return true;
 }
-extern "C" __declspec(dllexport)
+YOLO_API
 bool DetectImage(
         const unsigned char *imgData,
         int width,
@@ -111,7 +120,7 @@ bool DetectImage(
         return false;
     }
 }
-extern "C" __declspec(dllexport)
+YOLO_API
 void ReleaseModel() {
     if (g_yolodetect) {
         delete g_yolodetect;
