@@ -13,7 +13,6 @@
 
 typedef void* YOLO_HANDLE;
 
-
 YOLO_API
 YOLO_HANDLE CreateModel(const char *modelPath, int size, int task, bool useGPU, bool nms, bool half)
 {

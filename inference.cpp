@@ -217,7 +217,7 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
             rawData.convertTo(rawData, CV_32F);
         }
 
-
+        rawData = rawData.t();
         float* data = (float*)rawData.data;
         int num_classes = signalResultNum - 4;
 
