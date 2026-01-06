@@ -130,7 +130,7 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
             outputNodeNames.push_back(temp_buf);
         }
         options = Ort::RunOptions{ nullptr };
-        // WarmUpSession();
+        WarmUpSession();
         return RET_OK;
     }
     catch (const std::exception& e)
@@ -216,7 +216,7 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
             rawData = cv::Mat(signalResultNum, strideNum, CV_16F, output);
             rawData.convertTo(rawData, CV_32F);
         }
-        rawData = rawData.t();
+
 
         float* data = (float*)rawData.data;
         int num_classes = signalResultNum - 4;
@@ -334,10 +334,9 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
             result.classId = class_ids[idx];
             result.confidence = confidences[idx];
             result.box = boxes[idx];
-            result.mask_coeff = mask_coeffs[idx];
 
             // -------- mask = coeff * proto --------
-            cv::Mat coeffMat(1, 32, CV_32F, result.mask_coeff.data());
+            cv::Mat coeffMat(1, 32, CV_32F, mask_coeffs[idx].data());
             cv::Mat mask = coeffMat * protoMat; // [1, h*w]
             mask = mask.reshape(1, proto_h);   // [160, 160]
 

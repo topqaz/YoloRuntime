@@ -6,67 +6,46 @@
 #define YOLO_API extern "C"
 #endif
 
+
 #include <iostream>
 #include "inference.h"
+#include <utils.h>
+
+typedef void* YOLO_HANDLE;
 
 
-
-void drawMask(cv::Mat& img, const cv::Mat& mask, cv::Rect box, const cv::Scalar& color, float alpha = 0.5f)
-{
-    cv::Rect validBox = box & cv::Rect(0, 0, img.cols, img.rows);
-    if (validBox.area() == 0) return;
-    cv::Mat roi = img(validBox);
-    cv::Mat maskRoi = mask(validBox);
-    cv::Mat binMask;
-    if (maskRoi.type() != CV_8U) {
-        cv::threshold(maskRoi, binMask, 0.5, 255, cv::THRESH_BINARY);
-        binMask.convertTo(binMask, CV_8U);
-    } else {
-        binMask = maskRoi;
-    }
-    cv::Mat colorLayer(validBox.size(), CV_8UC3, color);
-
-    // 5. 加权混合 (核心步骤)
-    // blended = roi * (1-alpha) + colorLayer * alpha
-    cv::Mat blended;
-    cv::addWeighted(roi, 1.0 - alpha, colorLayer, alpha, 0.0, blended);
-    blended.copyTo(roi, binMask);
-}
-
-
-static YOLO_V8 *g_yolodetect = nullptr;
 YOLO_API
-bool InitModel(const char *modelPath, int size,int task, bool useGPU,bool nms,bool half) {
-    g_yolodetect = new YOLO_V8;
+YOLO_HANDLE CreateModel(const char *modelPath, int size, int task, bool useGPU, bool nms, bool half)
+{
+    YOLO_V8* detector = new YOLO_V8();
     DL_INIT_PARAM params;
     params.rectConfidenceThreshold = 0.1;
     params.iouThreshold = 0.5;
     params.modelPath = modelPath;
     params.imgSize = {size, size};
-    if(task==0)params.task = DETECT;
-    else if(task==1)params.task = SEGMENT;
-    else if(task==2)params.task = POSE;
-    else if(task==3)params.task = OBB;
+    if (task == 0) params.task = DETECT;
+    else if (task == 1) params.task = SEGMENT;
+    else if (task == 2) params.task = POSE;
+    else if (task == 3) params.task = OBB;
     params.nms = nms;
-    if (useGPU) {
-        params.cudaEnable = true;
-        params.half = half;
-    } else {
-        params.half = half;
-        params.cudaEnable = false;
-    }
-    std::cout << "modelPath:" << modelPath << std::endl;
-    std::cout << "size:" << size << std::endl;
-    std::cout << "useGPU:" << useGPU << std::endl;
-    std::cout << "task:" << task << std::endl;
-    std::cout << "nms:" << nms << std::endl;
-    std::cout << "half:" << half << std::endl;
-
-    g_yolodetect->CreateSession(params);
-    return true;
+    params.cudaEnable = useGPU;
+    params.half = half;
+    detector->CreateSession(params);
+    // try {
+    //     if (!detector->CreateSession(params)) {
+    //         throw std::runtime_error("CreateSession returned false");
+    //     }
+    // }
+    // catch (const std::exception& e) {
+    //     std::cerr << e.what() << std::endl;
+    //     delete detector;
+    //     return nullptr;
+    // }
+    return reinterpret_cast<YOLO_HANDLE>(detector);
 }
 YOLO_API
 bool DetectImage(
+        YOLO_HANDLE handle,
         const unsigned char *imgData,
         int width,
         int height,
@@ -74,32 +53,33 @@ bool DetectImage(
         DetectionResult *results,
         int maxCount,
         int *outCount,
-        bool showResult
+        bool saveResult
 ) {
-    if (!g_yolodetect || !imgData || !results || !outCount)
+    if (!handle || !imgData || !results || !outCount)
         return false;
+
+    YOLO_V8* detector = reinterpret_cast<YOLO_V8*>(handle);
+
     try {
-        cv::Mat img(height, width, CV_8UC3, (void *) imgData, stride);
+        if (stride < width * 3) return false;
+
+        cv::Mat img(height, width, CV_8UC3, (void *)imgData, stride);
         cv::Mat imgCopy = img.clone();
-        std::cout << "img size:" << imgCopy.size() << std::endl;
+
         std::vector<DL_RESULT> res;
-        g_yolodetect->RunSession(imgCopy, res);
-        std::cout << "Detected " << res.size() << " objects." << "success" << std::endl;
+        detector->RunSession(imgCopy, res);
 
-        int count = std::min((int) res.size(), maxCount);
+        int count = std::min((int)res.size(), maxCount);
         for (int i = 0; i < count; ++i) {
-            if (!res[i].mask.empty()){
-            cv::RNG rng(cv::getTickCount());
-            cv::Scalar color(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(0, 256));
-            drawMask(imgCopy, res[i].mask, res[i].box, color, 0.8);
-        }
-            cv::rectangle(imgCopy, res[i].box, cv::Scalar(0, 255, 0), 2);
-            float confidence = floor(100 * res[i].confidence) / 100;
-            std::string label = std::to_string(res[i].classId) + " " +
-                                std::to_string(confidence).substr(0, std::to_string(confidence).size() - 4);
-            cv::putText(imgCopy, label, cv::Point(res[i].box.x, res[i].box.y - 5),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 0, 255), 2);
 
+            if (!res[i].mask.empty() && res[i].mask.size() == imgCopy.size()) {
+                static cv::RNG rng(12345);
+                cv::Scalar color(rng.uniform(0,256), rng.uniform(0,256), rng.uniform(0,256));
+                drawMask(imgCopy, res[i].mask, res[i].box, color, 0.8f);
+
+            }
+
+            cv::rectangle(imgCopy, res[i].box, cv::Scalar(0,255,0), 2);
 
             results[i].x = res[i].box.x;
             results[i].y = res[i].box.y;
@@ -108,22 +88,22 @@ bool DetectImage(
             results[i].score = res[i].confidence;
             results[i].classId = res[i].classId;
         }
-        if (showResult){
-        cv::resize(imgCopy,imgCopy,cv::Size(800,800*height/width));
-        cv::imshow("Detection Result", imgCopy);
-        cv::waitKey(0);
-    }
+
+        if (saveResult) {
+            cv::imwrite("res.jpg", imgCopy);
+        }
+
         *outCount = count;
         return true;
     }
-    catch (...) {
+    catch (const std::exception&) {
         return false;
     }
 }
 YOLO_API
-void ReleaseModel() {
-    if (g_yolodetect) {
-        delete g_yolodetect;
-        g_yolodetect = nullptr;
-    }
+void DestroyModel(YOLO_HANDLE handle)
+{
+    if (!handle) return;
+    YOLO_V8* detector = reinterpret_cast<YOLO_V8*>(handle);
+    delete detector;
 }

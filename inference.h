@@ -59,7 +59,6 @@ typedef struct _DL_RESULT
     float confidence;
     cv::Rect box;
     std::vector<cv::Point2f> keyPoints;
-    std::vector<float> mask_coeff;
     cv::Mat mask;
 } DL_RESULT;
 
