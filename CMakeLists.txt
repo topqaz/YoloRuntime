@@ -10,7 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-
 # -------------- OpenCV  ------------------#
 #set(OpenCV_DIR D:/user/top/opencv/build/x64/vc16/lib)
 find_package(OpenCV REQUIRED)
@@ -26,6 +25,7 @@ if (NOT APPLE AND USE_CUDA)
 else ()
     set(USE_CUDA OFF)
 endif ()
+
 
 # -------------- ONNXRUNTIME  ------------------#
 
@@ -61,6 +61,8 @@ set(PROJECT_SOURCES
         YoloRuntime.cpp
         inference.h
         inference.cpp
+        utils.h
+        utils.cpp
 )
 
 #add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
@@ -76,6 +78,7 @@ elseif (LINUX)
         target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
     endif ()
 elseif (APPLE)
+
     target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${ONNXRUNTIME_ROOT}/lib/libonnxruntime.dylib)
 endif ()
 

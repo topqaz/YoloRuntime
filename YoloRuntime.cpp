@@ -1,12 +1,3 @@
-#if defined(_WIN32)
-#define YOLO_API extern "C" __declspec(dllexport)
-#elif defined(__GNUC__)
-#define YOLO_API extern "C" __attribute__((visibility("default")))
-#else
-#define YOLO_API extern "C"
-#endif
-
-
 #include <iostream>
 #include "inference.h"
 #include <utils.h>
@@ -14,9 +5,9 @@
 typedef void* YOLO_HANDLE;
 
 YOLO_API
-YOLO_HANDLE CreateModel(const char *modelPath, int size, int task, bool useGPU, bool nms, bool half)
+YOLO_HANDLE CreateModel(const char *modelPath, int size, int task, bool useGPU, bool nms, bool halfEnable)
 {
-    YOLO_V8* detector = new YOLO_V8();
+    YOLO* detector = new YOLO();
     DL_INIT_PARAM params;
     params.rectConfidenceThreshold = 0.1;
     params.iouThreshold = 0.5;
@@ -28,18 +19,17 @@ YOLO_HANDLE CreateModel(const char *modelPath, int size, int task, bool useGPU, 
     else if (task == 3) params.task = OBB;
     params.nms = nms;
     params.cudaEnable = useGPU;
-    params.half = half;
-    detector->CreateSession(params);
-    // try {
-    //     if (!detector->CreateSession(params)) {
-    //         throw std::runtime_error("CreateSession returned false");
-    //     }
-    // }
-    // catch (const std::exception& e) {
-    //     std::cerr << e.what() << std::endl;
-    //     delete detector;
-    //     return nullptr;
-    // }
+    params.halfEnable = halfEnable;
+    try {
+        if (!detector->CreateSession(params)) {
+            throw std::runtime_error("CreateSession returned false");
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        delete detector;
+        return nullptr;
+    }
     return reinterpret_cast<YOLO_HANDLE>(detector);
 }
 YOLO_API
@@ -52,12 +42,13 @@ bool DetectImage(
         DetectionResult *results,
         int maxCount,
         int *outCount,
-        bool saveResult
+        bool saveResult,
+        imagedata *outImgData
 ) {
     if (!handle || !imgData || !results || !outCount)
         return false;
 
-    YOLO_V8* detector = reinterpret_cast<YOLO_V8*>(handle);
+    YOLO* detector = reinterpret_cast<YOLO*>(handle);
 
     try {
         if (stride < width * 3) return false;
@@ -75,7 +66,6 @@ bool DetectImage(
                 static cv::RNG rng(12345);
                 cv::Scalar color(rng.uniform(0,256), rng.uniform(0,256), rng.uniform(0,256));
                 drawMask(imgCopy, res[i].mask, res[i].box, color, 0.8f);
-
             }
 
             cv::rectangle(imgCopy, res[i].box, cv::Scalar(0,255,0), 2);
@@ -92,6 +82,16 @@ bool DetectImage(
             cv::imwrite("res.jpg", imgCopy);
         }
 
+
+        size_t imgSize = imgCopy.total() * imgCopy.elemSize();
+
+        outImgData->data = new unsigned char[imgSize];
+        memcpy(outImgData->data, imgCopy.data, imgSize);
+
+        outImgData->width = imgCopy.cols;
+        outImgData->height = imgCopy.rows;
+        outImgData->channels = imgCopy.channels();
+
         *outCount = count;
         return true;
     }
@@ -103,6 +103,31 @@ YOLO_API
 void DestroyModel(YOLO_HANDLE handle)
 {
     if (!handle) return;
-    YOLO_V8* detector = reinterpret_cast<YOLO_V8*>(handle);
+    YOLO* detector = reinterpret_cast<YOLO*>(handle);
     delete detector;
+}
+YOLO_API
+void FreeData(unsigned char* p)
+{
+    if (p) delete[] p;
+}
+
+YOLO_API
+bool CheckGpuAvailable()
+{
+#ifdef USE_CUDA
+    try {
+        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "gpu_check");
+
+        Ort::SessionOptions so;
+        OrtCUDAProviderOptions cuda_options;
+        so.AppendExecutionProvider_CUDA(cuda_options);
+        return true;
+    }
+    catch (...) {
+        return false;
+    }
+#else
+    return false;
+#endif
 }

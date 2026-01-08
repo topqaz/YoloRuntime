@@ -2,12 +2,12 @@
 #include <regex>
 
 #define benchmark
-YOLO_V8::YOLO_V8() {
+YOLO::YOLO() {
 
 }
 
 
-YOLO_V8::~YOLO_V8() {
+YOLO::~YOLO() {
     delete session;
 }
 
@@ -41,7 +41,7 @@ char* BlobFromImage(cv::Mat& iImg, T& iBlob) {
 }
 
 
-char* YOLO_V8::PreProcess(cv::Mat& iImg, std::vector<int> iImgSize, cv::Mat& oImg)
+bool YOLO::PreProcess(cv::Mat& iImg, std::vector<int> iImgSize, cv::Mat& oImg)
 {
     if (iImg.channels() == 3)
     {
@@ -66,11 +66,11 @@ char* YOLO_V8::PreProcess(cv::Mat& iImg, std::vector<int> iImgSize, cv::Mat& oIm
         oImg.copyTo(tempImg(cv::Rect(0, 0, oImg.cols, oImg.rows)));
         oImg = tempImg;
 
-    return RET_OK;
+    return true;
 }
 
 
-char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
+bool YOLO::CreateSession(DL_INIT_PARAM& iParams) {
     char* Ret = RET_OK;
     std::regex pattern("[\u4e00-\u9fa5]");
     bool result = std::regex_search(iParams.modelPath, pattern);
@@ -85,7 +85,7 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
         rectConfidenceThreshold = iParams.rectConfidenceThreshold;
         iouThreshold = iParams.iouThreshold;
         imgSize = iParams.imgSize;
-        half = iParams.half;
+        halfEnable = iParams.halfEnable;
         nms = iParams.nms;
         task = iParams.task;
         cudaEnable = iParams.cudaEnable;
@@ -131,32 +131,29 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
         }
         options = Ort::RunOptions{ nullptr };
         WarmUpSession();
-        return RET_OK;
+        return true;
     }
     catch (const std::exception& e)
     {
-        const char* str1 = "[YOLO_V8]:";
+        const char* str1 = "[YOLO]:";
         const char* str2 = e.what();
         std::string result = std::string(str1) + std::string(str2);
         char* merged = new char[result.length() + 1];
         std::strcpy(merged, result.c_str());
         std::cout << merged << std::endl;
         delete[] merged;
-        return "[YOLO_V8]:Create session failed.";
+        return "[YOLO]:Create session failed.";
     }
-
 }
 
 
-char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
+bool YOLO::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
 #ifdef benchmark
     clock_t starttime_1 = clock();
 #endif // benchmark
-
-    char* Ret = RET_OK;
     cv::Mat processedImg;
     PreProcess(iImg, imgSize, processedImg);
-    if (!half)   // FP32
+    if (!halfEnable)   // FP32
     {
         float* blob = new float[processedImg.total() * 3];
         BlobFromImage(processedImg, blob);
@@ -173,12 +170,12 @@ char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
 #endif
     }
 
-    return Ret;
+    return true;
 }
 
 
 template<typename N>
-char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::vector<int64_t>& inputNodeDims,
+bool YOLO::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::vector<int64_t>& inputNodeDims,
     std::vector<DL_RESULT>& oResult) {
     Ort::Value inputTensor = Ort::Value::CreateTensor<typename std::remove_pointer<N>::type>(
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU), blob, 3 * imgSize.at(0) * imgSize.at(1),
@@ -205,7 +202,7 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
         std::vector<float> confidences;
         std::vector<cv::Rect> boxes;
         cv::Mat rawData;
-        if (!half)
+        if (!halfEnable)
         {
             // FP32
             rawData = cv::Mat(signalResultNum, strideNum, CV_32F, output);
@@ -272,7 +269,7 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
     std::vector<std::vector<float>> mask_coeffs;
 
     cv::Mat rawData;
-    if (!half)
+    if (!halfEnable)
         rawData = cv::Mat(signalResultNum, strideNum, CV_32F, output);
     else {
         rawData = cv::Mat(signalResultNum, strideNum, CV_16F, output);
@@ -395,15 +392,15 @@ char* YOLO_V8::TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::
         }
 #endif // benchmark
 
-    return RET_OK;
+    return true;
 }
 
-char* YOLO_V8::WarmUpSession() {
+bool YOLO::WarmUpSession() {
     clock_t starttime_1 = clock();
     cv::Mat iImg = cv::Mat(cv::Size(imgSize.at(0), imgSize.at(1)), CV_8UC3);
     cv::Mat processedImg;
     PreProcess(iImg, imgSize, processedImg);
-    if (!half)
+    if (!halfEnable)
     {
         float* blob = new float[iImg.total() * 3];
         BlobFromImage(processedImg, blob);
@@ -438,5 +435,5 @@ char* YOLO_V8::WarmUpSession() {
         }
 #endif
     }
-    return RET_OK;
+    return true;
 }

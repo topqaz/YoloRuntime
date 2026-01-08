@@ -12,7 +12,6 @@
 
 #include <string>
 #include <vector>
-#include <cstdio>
 #include <opencv2/opencv.hpp>
 #include "onnxruntime_cxx_api.h"
 
@@ -28,6 +27,14 @@ struct DetectionResult {
     float score;
     int classId;
 };
+
+struct imagedata {
+    unsigned char* data;
+    int width;
+    int height;
+    int channels;
+};
+
 
 
 enum TASK
@@ -47,7 +54,7 @@ typedef struct _DL_INIT_PARAM
     bool cudaEnable = false;
     int logSeverityLevel = 3;
     int intraOpNumThreads = 1;
-    bool half = false;
+    bool halfEnable = false;
     bool nms = false;
     TASK task = DETECT;
 } DL_INIT_PARAM;
@@ -63,25 +70,25 @@ typedef struct _DL_RESULT
 } DL_RESULT;
 
 
-class YOLO_V8
+class YOLO
 {
 public:
-    YOLO_V8();
+    YOLO();
 
-    ~YOLO_V8();
+    ~YOLO();
 
 public:
-    char* CreateSession(DL_INIT_PARAM& iParams);
+    bool CreateSession(DL_INIT_PARAM& iParams);
 
-    char* RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult);
+    bool RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult);
 
-    char* WarmUpSession();
+    bool WarmUpSession();
 
     template<typename N>
-    char* TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::vector<int64_t>& inputNodeDims,
+    bool TensorProcess(clock_t& starttime_1, cv::Mat& iImg, N& blob, std::vector<int64_t>& inputNodeDims,
         std::vector<DL_RESULT>& oResult);
 
-    char* PreProcess(cv::Mat& iImg, std::vector<int> iImgSize, cv::Mat& oImg);
+    bool PreProcess(cv::Mat& iImg, std::vector<int> iImgSize, cv::Mat& oImg);
 
 
 private:
@@ -96,7 +103,7 @@ private:
     float rectConfidenceThreshold;
     float iouThreshold;
     float resizeScales;//letterbox scale
-    bool half;
+    bool halfEnable;
     bool nms;
     TASK task;
 };
